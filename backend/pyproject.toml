@@ -1,0 +1,63 @@
+[project]
+name = "skillbridge-api"
+version = "1.0.0"
+description = "SkillBridge — Academia-Industry Collaboration & Employability Platform (API)"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = ["migrations/versions", ".venv", "var"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle
+    "F",    # pyflakes
+    "I",    # import order
+    "B",    # bugbear
+    "UP",   # pyupgrade
+    "S",    # bandit — security
+    "ASYNC",# async correctness
+    "C4",   # comprehensions
+    "SIM",  # simplifications
+    "RUF",  # ruff-specific
+]
+ignore = [
+    "E501",    # long lines are handled by the formatter, not the linter
+    "B008",    # FastAPI's Depends() in defaults is the documented idiom
+    "S101",    # assert is how tests express expectations
+    "RUF012",  # ClassVar annotations on SQLAlchemy/Pydantic class attributes
+    "RUF001",  # en dashes and similar are deliberate typography in user-facing copy
+    "SIM102",  # nested ifs often read better than a compound condition here
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Package __init__ files re-export their public surface; those imports are the
+# point, and the models package additionally needs every module imported so
+# SQLAlchemy's registry is complete before mapping.
+"__init__.py" = ["F401"]
+"app/models/__init__.py" = ["F401", "F403"]
+# Seeds generate demo data; `random` here is fixture variety, not cryptography.
+"seeds/*" = ["S311"]
+"tests/*" = ["S105", "S106", "S311"]
+# The deterministic engines hash for stable shuffling, not for security.
+"app/ai/*" = ["S324"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "seeds", "tests"]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+warn_redundant_casts = true
+warn_unused_ignores = false
+disallow_untyped_defs = false
+check_untyped_defs = true
+exclude = ["migrations/", "var/"]
+
+[[tool.mypy.overrides]]
+module = ["celery.*", "boto3.*", "botocore.*", "reportlab.*", "sklearn.*", "docx.*"]
+ignore_missing_imports = true
+
+# pytest is configured in pytest.ini, which takes precedence over pyproject.

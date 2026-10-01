@@ -1,0 +1,235 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "22"
+
+jobs:
+  # ---------------------------------------------------------------- backend
+  backend:
+    name: Backend · lint, types, tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: skillbridge
+          POSTGRES_PASSWORD: skillbridge_ci
+          POSTGRES_DB: skillbridge_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U skillbridge"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Lint (ruff)
+        # `ruff format` is intentionally not enforced: the catalogue and role
+        # tables are hand-aligned for readability and the formatter would
+        # flatten them.
+        run: ruff check .
+
+      - name: Type check (mypy)
+        run: mypy app seeds
+        continue-on-error: true   # advisory while annotations are completed
+
+      - name: Tests (SQLite — the portable path)
+        run: pytest -q --cov=app --cov-report=xml --cov-report=term-missing
+        env:
+          ENVIRONMENT: development
+          DATABASE_URL: sqlite+aiosqlite:///./var/ci.db
+          CACHE_ENABLED: "false"
+          CELERY_TASK_ALWAYS_EAGER: "true"
+
+      - name: Migrations apply cleanly to PostgreSQL
+        # SQLite proves the code works; this proves the schema the production
+        # dialect will actually receive is valid, including JSONB and UUIDs.
+        run: |
+          alembic upgrade head
+          alembic downgrade base
+          alembic upgrade head
+        env:
+          DATABASE_URL: postgresql+asyncpg://skillbridge:skillbridge_ci@localhost:5432/skillbridge_test
+
+      - name: Seed data loads on PostgreSQL
+        run: python -m seeds.seed --reset --students 5
+        env:
+          DATABASE_URL: postgresql+asyncpg://skillbridge:skillbridge_ci@localhost:5432/skillbridge_test
+          REDIS_URL: redis://localhost:6379/0
+          CACHE_ENABLED: "false"
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage
+          path: backend/coverage.xml
+          retention-days: 7
+
+  # --------------------------------------------------------------- frontend
+  frontend:
+    name: Frontend · types, lint, unit tests, build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests with coverage
+        # The contract tests read ../backend/app/models/enums.py, so the whole
+        # repository has to be checked out — it is.
+        run: npm run test:coverage
+
+      - name: Production build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:8000
+          NEXT_PUBLIC_SITE_URL: http://localhost:3000
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/lcov.info
+          retention-days: 7
+
+  # -------------------------------------------------------------------- e2e
+  e2e:
+    name: End-to-end · Playwright
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Build the frontend
+        working-directory: frontend
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:8000
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+
+      - name: Run the suite
+        # playwright.config.ts starts both servers itself, against a throwaway
+        # SQLite database seeded from scratch.
+        working-directory: frontend
+        run: npx playwright test
+        env:
+          CI: "true"
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 14
+
+  # ----------------------------------------------------------------- docker
+  docker:
+    name: Docker · images build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build the API image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: false
+          load: true
+          tags: skillbridge-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build the web image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: false
+          load: true
+          tags: skillbridge-web:ci
+          build-args: |
+            NEXT_PUBLIC_API_URL=http://localhost:8000
+            NEXT_PUBLIC_SITE_URL=http://localhost:3000
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Compose file is valid
+        run: docker compose config --quiet

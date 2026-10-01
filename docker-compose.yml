@@ -1,0 +1,225 @@
+# SkillBridge — full development stack.
+#
+#   docker compose up --build
+#
+# Frontend  http://localhost:3000
+# API       http://localhost:8000
+# Swagger   http://localhost:8000/docs
+# MinIO     http://localhost:9001  (console)
+# Mailpit   http://localhost:8025  (captured emails)
+
+name: skillbridge
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-skillbridge}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-skillbridge_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-skillbridge}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Runs once, on an empty data directory, before anything connects.
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-skillbridge} -d ${POSTGRES_DB:-skillbridge}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: quay.io/minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-skillbridge}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-skillbridge_dev_secret}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Captures every outgoing email in development; nothing leaves the machine.
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    environment:
+      MP_MAX_MESSAGES: 500
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Everything documented in .env.example reaches the container. Without
+    # this, only the two dozen variables named below did, and setting anything
+    # else — a match weight, a rate limit, REQUIRE_EMAIL_VERIFICATION — was
+    # silently ignored under Docker. The `environment:` block still wins, and
+    # is reserved for values that must differ inside the compose network.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      ENVIRONMENT: development
+      DEBUG: "true"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-skillbridge}:${POSTGRES_PASSWORD:-skillbridge_dev_password}@postgres:5432/${POSTGRES_DB:-skillbridge}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-jwt-secret-change-me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-only-insecure-refresh-secret-change-me}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      BACKEND_URL: ${BACKEND_URL:-http://localhost:8000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      EMAIL_PROVIDER: smtp
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      STORAGE_PROVIDER: s3
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-skillbridge}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-skillbridge_dev_secret}
+      S3_BUCKET: ${S3_BUCKET:-skillbridge}
+      AI_PROVIDER: ${AI_PROVIDER:-deterministic}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-}
+      SEED_ON_START: ${SEED_ON_START:-true}
+    ports:
+      - "8000:8000"
+    entrypoint: ["/app/docker-entrypoint.sh"]
+    command:
+      ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000",
+       "--proxy-headers", "--forwarded-allow-ips", "*"]
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    # Everything documented in .env.example reaches the container. Without
+    # this, only the two dozen variables named below did, and setting anything
+    # else — a match weight, a rate limit, REQUIRE_EMAIL_VERIFICATION — was
+    # silently ignored under Docker. The `environment:` block still wins, and
+    # is reserved for values that must differ inside the compose network.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      ENVIRONMENT: development
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-skillbridge}:${POSTGRES_PASSWORD:-skillbridge_dev_password}@postgres:5432/${POSTGRES_DB:-skillbridge}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-jwt-secret-change-me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-only-insecure-refresh-secret-change-me}
+      EMAIL_PROVIDER: smtp
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      STORAGE_PROVIDER: s3
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-skillbridge}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-skillbridge_dev_secret}
+      S3_BUCKET: ${S3_BUCKET:-skillbridge}
+    command: ["celery", "-A", "app.tasks.celery_app.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+    # Inherited from the API image, which probes an HTTP endpoint a worker
+    # does not serve. Ask Celery whether the worker is answering instead.
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app.celery_app inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+
+  beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      worker:
+        condition: service_started
+    # Everything documented in .env.example reaches the container. Without
+    # this, only the two dozen variables named below did, and setting anything
+    # else — a match weight, a rate limit, REQUIRE_EMAIL_VERIFICATION — was
+    # silently ignored under Docker. The `environment:` block still wins, and
+    # is reserved for values that must differ inside the compose network.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      ENVIRONMENT: development
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-skillbridge}:${POSTGRES_PASSWORD:-skillbridge_dev_password}@postgres:5432/${POSTGRES_DB:-skillbridge}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      CELERY_TASK_ALWAYS_EAGER: "false"
+      JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-jwt-secret-change-me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-only-insecure-refresh-secret-change-me}
+    command:
+      ["celery", "-A", "app.tasks.celery_app.celery_app", "beat", "--loglevel=info",
+       "--schedule=/app/var/celerybeat-schedule",
+       "--pidfile="]
+    # Beat has no HTTP server either, and nothing to query; the schedule file
+    # it keeps updating is the liveness signal.
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /app/var/celerybeat-schedule* || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 40s
+      retries: 3
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

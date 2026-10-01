@@ -1,0 +1,328 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===========================================================================
+   Design tokens
+   ---------------------------------------------------------------------------
+   Every colour in the application resolves through one of these variables, so
+   a theme is a set of values rather than a set of overrides scattered through
+   components. Values are space-separated RGB channels because Tailwind
+   composes them with `<alpha-value>`, which keeps `bg-ink-950/40` working.
+
+   The dark palette is hand-tuned, not an inversion. Two things move
+   independently of the neutral ramp:
+
+     * `canvas`  — surfaces that are dark by design in both themes (the
+                   marketing hero, the sign-in aside, modal scrims, code
+                   blocks). Inverting those would ruin them.
+     * `primary` — solid interactive fills. A button background and link text
+                   need to move in *opposite* directions between themes, so
+                   they cannot share a token.
+
+   Every text token was checked against its surface: all reach WCAG AA, and
+   most reach AAA. See the table in docs/theming.md.
+   ========================================================================= */
+
+@layer base {
+  :root {
+    --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+
+    /* ---- neutral ramp: structure, text and borders ---- */
+    --c-ink-50: 246 247 249;
+    --c-ink-100: 236 238 242;
+    --c-ink-200: 213 217 226;
+    --c-ink-300: 176 184 201;
+    --c-ink-400: 133 145 170;
+    --c-ink-500: 102 115 143;
+    --c-ink-600: 81 92 118;
+    --c-ink-700: 66 75 96;
+    --c-ink-800: 57 64 81;
+    --c-ink-900: 51 56 70;
+    --c-ink-950: 29 32 41;
+
+    /* ---- brand: links, emphasis, data series ---- */
+    --c-brand-50: 238 246 252;
+    --c-brand-100: 216 234 248;
+    --c-brand-200: 185 217 242;
+    --c-brand-300: 139 193 232;
+    --c-brand-400: 87 161 218;
+    --c-brand-500: 52 131 198;
+    --c-brand-600: 36 105 168;
+    --c-brand-700: 28 93 153;
+    --c-brand-800: 27 74 114;
+    --c-brand-900: 27 63 95;
+    --c-brand-950: 18 40 63;
+
+    /* ---- accent: momentum, readiness, achievement ---- */
+    --c-accent-50: 255 248 237;
+    --c-accent-100: 255 240 212;
+    --c-accent-200: 255 221 168;
+    --c-accent-300: 255 196 113;
+    --c-accent-400: 255 160 56;
+    --c-accent-500: 255 131 18;
+    --c-accent-600: 240 103 8;
+    --c-accent-700: 199 76 9;
+    --c-accent-800: 158 60 16;
+    --c-accent-900: 127 51 16;
+    --c-accent-950: 69 23 6;
+
+    /* ---- status ---- */
+    --c-success-50: 238 251 243;
+    --c-success-500: 23 153 107;
+    --c-success-600: 15 125 87;
+    --c-success-700: 13 101 71;
+    --c-warning-50: 255 251 235;
+    --c-warning-500: 217 130 7;
+    --c-warning-600: 180 95 6;
+    --c-danger-50: 254 243 242;
+    --c-danger-500: 217 58 53;
+    --c-danger-600: 184 39 34;
+    --c-danger-700: 152 33 29;
+
+    /* ---- surfaces ---- */
+    --c-surface: 255 255 255;          /* cards, inputs, menus */
+    --c-surface-muted: 247 248 250;    /* page background */
+    --c-surface-sunken: 238 240 244;   /* inset wells, table headers */
+    --c-surface-overlay: 255 255 255;  /* dialogs, popovers */
+
+    /* ---- solid interactive fills (white label sits on these) ---- */
+    --c-primary: 28 93 153;
+    --c-primary-hover: 27 74 114;
+    --c-primary-active: 27 63 95;
+    --c-primary-fg: 255 255 255;
+    --c-danger-solid: 184 39 34;
+    --c-danger-solid-hover: 152 33 29;
+    --c-success-solid: 15 125 87;
+    --c-success-solid-hover: 13 101 71;
+
+    /* ---- always dark, in both themes ---- */
+    --c-canvas: 29 32 41;
+    --c-canvas-soft: 51 56 70;
+    --c-canvas-fg: 255 255 255;
+    --c-canvas-muted: 176 184 201;
+
+    /* ---- elevation ---- */
+    --c-shadow: 29 32 41;
+    --shadow-weak: 0.04;
+    --shadow-soft: 0.06;
+    --shadow-medium: 0.08;
+    --shadow-strong: 0.12;
+
+    /* ---- chart surfaces, read by Recharts and the SVG gauges ---- */
+    --c-chart-grid: 236 238 242;
+    --c-chart-axis: 176 184 201;
+    --c-chart-label: 102 115 143;
+    --c-chart-track: 236 238 242;
+    --chart-1: #2469a8;
+    --chart-2: #17996b;
+    --chart-3: #ff8312;
+    --chart-4: #7c5cbf;
+    --chart-5: #0e7490;
+    --chart-6: #d93a35;
+    --chart-7: #b45309;
+    --chart-8: #515c76;
+
+    /* ---- hairline used behind the marketing hero ---- */
+    --c-hero-grid: 29 32 41;
+    --hero-grid-alpha: 0.045;
+
+    color-scheme: light;
+  }
+
+  .dark {
+    /* Hand-tuned graphite. Cards sit above the page, overlays above cards. */
+    --c-ink-50: 27 31 39;
+    --c-ink-100: 35 41 54;
+    --c-ink-200: 46 53 66;
+    --c-ink-300: 60 68 83;
+    --c-ink-400: 124 135 153;
+    --c-ink-500: 151 161 179;
+    --c-ink-600: 174 183 199;
+    --c-ink-700: 196 204 217;
+    --c-ink-800: 218 224 234;
+    --c-ink-900: 233 237 244;
+    --c-ink-950: 245 247 250;
+
+    /* 50-200 become dark tints; 600-950 become the readable light hues. */
+    --c-brand-50: 18 34 50;
+    --c-brand-100: 22 43 62;
+    --c-brand-200: 29 58 84;
+    --c-brand-300: 42 84 122;
+    --c-brand-400: 74 140 196;
+    --c-brand-500: 91 168 227;
+    --c-brand-600: 106 180 239;
+    --c-brand-700: 124 190 242;
+    --c-brand-800: 155 206 246;
+    --c-brand-900: 184 221 249;
+    --c-brand-950: 214 236 253;
+
+    --c-accent-50: 45 28 12;
+    --c-accent-100: 58 35 14;
+    --c-accent-200: 82 48 18;
+    --c-accent-300: 140 80 26;
+    --c-accent-400: 255 176 87;
+    --c-accent-500: 255 152 56;
+    --c-accent-600: 255 168 80;
+    --c-accent-700: 255 192 120;
+    --c-accent-800: 255 208 160;
+    --c-accent-900: 255 224 195;
+    --c-accent-950: 255 240 225;
+
+    --c-success-50: 12 42 32;
+    --c-success-500: 52 197 152;
+    --c-success-600: 78 212 161;
+    --c-success-700: 111 223 179;
+    --c-warning-50: 48 36 10;
+    --c-warning-500: 240 180 41;
+    --c-warning-600: 245 196 81;
+    --c-danger-50: 51 23 24;
+    --c-danger-500: 248 113 113;
+    --c-danger-600: 249 138 138;
+    --c-danger-700: 252 165 165;
+
+    --c-surface: 22 27 36;
+    --c-surface-muted: 13 17 23;
+    --c-surface-sunken: 9 12 17;
+    --c-surface-overlay: 31 37 47;
+
+    /* Deep enough for a white label; light enough to read against a card. */
+    --c-primary: 42 114 184;
+    --c-primary-hover: 52 131 198;
+    --c-primary-active: 36 105 168;
+    --c-primary-fg: 255 255 255;
+    --c-danger-solid: 197 45 40;
+    --c-danger-solid-hover: 217 58 53;
+    --c-success-solid: 17 140 98;
+    --c-success-solid-hover: 23 153 107;
+
+    /* Unchanged: these surfaces are dark in both themes. */
+    --c-canvas: 9 12 17;
+    --c-canvas-soft: 31 37 47;
+    --c-canvas-fg: 245 247 250;
+    --c-canvas-muted: 151 161 179;
+
+    /* Black shadows disappear on a dark page; lean harder on them. */
+    --c-shadow: 0 0 0;
+    --shadow-weak: 0.30;
+    --shadow-soft: 0.36;
+    --shadow-medium: 0.46;
+    --shadow-strong: 0.58;
+
+    --c-chart-grid: 46 53 66;
+    --c-chart-axis: 76 86 104;
+    --c-chart-label: 151 161 179;
+    --c-chart-track: 46 53 66;
+    /* Lifted and slightly desaturated so series stay distinct on graphite. */
+    --chart-1: #6ab4ef;
+    --chart-2: #4ed4a1;
+    --chart-3: #ffb057;
+    --chart-4: #b49bf0;
+    --chart-5: #45c2d6;
+    --chart-6: #f87171;
+    --chart-7: #f0b429;
+    --chart-8: #97a1b3;
+
+    --c-hero-grid: 255 255 255;
+    --hero-grid-alpha: 0.05;
+
+    color-scheme: dark;
+  }
+
+  * {
+    @apply border-ink-200;
+  }
+
+  html {
+    @apply scroll-smooth antialiased;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-surface-muted text-ink-800;
+    font-family: var(--font-sans);
+    text-rendering: optimizeLegibility;
+  }
+
+  /*
+   * Theme changes are instantaneous for layout but eased for colour, so the
+   * switch reads as a transition rather than a flash. Scoped to the properties
+   * that actually change, and suppressed while the theme class is being
+   * applied so the initial paint is never animated.
+   */
+  body:not(.theme-switching) *,
+  body:not(.theme-switching) *::before,
+  body:not(.theme-switching) *::after {
+    transition-property: background-color, border-color, color, fill, stroke,
+      box-shadow;
+    transition-duration: 180ms;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* Typography hierarchy: tight, confident headings on a calm body. */
+  h1 { @apply text-3xl font-semibold tracking-[-0.02em] text-ink-950 sm:text-4xl; }
+  h2 { @apply text-2xl font-semibold tracking-[-0.015em] text-ink-950; }
+  h3 { @apply text-lg font-semibold tracking-[-0.01em] text-ink-900; }
+
+  /* A visible focus ring everywhere, never removed. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-600 ring-offset-2;
+    --tw-ring-offset-color: rgb(var(--c-surface));
+  }
+
+  ::selection {
+    @apply bg-brand-200 text-brand-950;
+  }
+
+  /* Native form controls and scrollbars follow the theme, not the OS default. */
+  ::-webkit-scrollbar { width: 12px; height: 12px; }
+  ::-webkit-scrollbar-track { background: rgb(var(--c-surface-muted)); }
+  ::-webkit-scrollbar-thumb {
+    background: rgb(var(--c-ink-300));
+    border: 3px solid rgb(var(--c-surface-muted));
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: rgb(var(--c-ink-400)); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .skip-link {
+    @apply sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100]
+           focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-sm
+           focus:font-medium focus:text-primary-fg;
+  }
+
+  /* Subtle grid used behind the landing hero. */
+  .hero-grid {
+    background-image:
+      linear-gradient(to right,
+        rgb(var(--c-hero-grid) / var(--hero-grid-alpha)) 1px, transparent 1px),
+      linear-gradient(to bottom,
+        rgb(var(--c-hero-grid) / var(--hero-grid-alpha)) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(ellipse 80% 55% at 50% 0%, #000 55%, transparent 100%);
+  }
+
+  .surface-panel {
+    @apply rounded-2xl border border-ink-200/80 bg-surface shadow-card;
+  }
+}
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+  .text-pretty { text-wrap: pretty; }
+
+  /* Hide scrollbars on horizontal filter rails without losing scrollability. */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}

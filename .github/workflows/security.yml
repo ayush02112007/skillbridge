@@ -1,0 +1,88 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 3 * * 1"   # Monday, 03:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  dependencies:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+
+      - name: Python advisories
+        working-directory: backend
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt --strict || true
+
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+
+      - name: npm advisories
+        working-directory: frontend
+        run: npm audit --audit-level=high || true
+
+  secrets:
+    name: No secrets in the tree
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: Committed .env files
+        run: |
+          # .env.example is the only environment file that belongs in git.
+          found=$(git ls-files | grep -E '(^|/)\.env($|\.)' | grep -v '\.env\.example$' || true)
+          if [ -n "$found" ]; then
+            echo "::error::environment files are committed:"; echo "$found"; exit 1
+          fi
+          echo "no committed .env files"
+
+      - name: No API keys in frontend source
+        # Section 45 of the specification: nothing privileged may reach the
+        # browser bundle. Only NEXT_PUBLIC_ variables are shipped, and those
+        # are public by definition, so none of them may look like a secret.
+        run: |
+          if grep -rInE 'NEXT_PUBLIC_[A-Z_]*(SECRET|API_KEY|TOKEN|PASSWORD|PRIVATE)' frontend --include='*.ts' --include='*.tsx' --include='*.mjs' --include='*.json' --exclude-dir=node_modules; then
+            echo "::error::a secret-looking value is exposed to the browser bundle"; exit 1
+          fi
+          echo "no secret-shaped public variables"
+
+      - name: Dev secrets are not the production default
+        run: |
+          # The sentinel must exist in exactly one place — the setting that
+          # validate_runtime() checks — and never in a deployment manifest.
+          if grep -rIn 'dev-only-insecure' --include='*.yml' --include='*.yaml' docker docker-compose.yml docker-compose.prod.yml 2>/dev/null; then
+            echo "::error::a development secret appears in deployment configuration"; exit 1
+          fi
+          echo "no development secrets in deployment configuration"
+
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          language: ${{ matrix.language }}
+          queries: security-and-quality
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:${{ matrix.language }}

@@ -1,0 +1,45 @@
+# --- secrets (never commit) ---------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+infrastructure/nginx/certs/*
+!infrastructure/nginx/certs/.gitkeep
+
+# --- python -------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.venv-*/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# --- node ---------------------------------------------------------------------
+node_modules/
+.next/
+out/
+.turbo/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# --- runtime data -------------------------------------------------------------
+var/
+*.db
+*.db-wal
+*.db-shm
+*.log
+
+# --- os / editors -------------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

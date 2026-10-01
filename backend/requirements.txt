@@ -1,0 +1,49 @@
+# ---- Web framework ----
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+
+# ---- Data / validation ----
+pydantic==2.10.5
+pydantic-settings==2.7.1
+email-validator==2.2.0
+
+# ---- Database ----
+SQLAlchemy==2.0.36
+alembic==1.14.0
+asyncpg==0.30.0
+psycopg2-binary==2.9.10
+aiosqlite==0.20.0
+greenlet==3.1.1
+
+# ---- Security ----
+passlib[bcrypt]==1.7.4
+argon2-cffi==23.1.0
+PyJWT==2.10.1
+bcrypt==4.2.1
+
+# ---- Cache / queue ----
+redis==5.2.1
+celery==5.4.0
+
+# ---- Object storage ----
+boto3==1.35.92
+
+# ---- AI / ML ----
+numpy==2.2.1
+pandas==2.2.3
+scikit-learn==1.6.1
+joblib==1.4.2
+lightgbm==4.5.0
+scipy==1.14.1
+
+# ---- Docs / reports ----
+reportlab==4.2.5
+pypdf==5.1.0
+python-docx==1.1.2
+
+# ---- HTTP / misc ----
+httpx==0.28.1
+python-dateutil==2.9.0.post0
+structlog==24.4.0
+slowapi==0.1.9
