@@ -67,15 +67,17 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
         # The API serves JSON and the Swagger UI only; the docs pages need
         # the CDN assets, everything else is locked down.
-        if request.url.path in ("/docs", "/redoc", "/docs/oauth2-redirect"):
+        if request.url.path in ("/docs", "/redoc", "/openapi.json"):
             headers.setdefault(
                 "Content-Security-Policy",
-                "default-src 'self'; img-src 'self' data: https://fastapi.tiangolo.com; "
+                "default-src 'self'; "
+                "img-src 'self' data: https://fastapi.tiangolo.com; "
                 "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
-                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net "
-                "https://fonts.googleapis.com; "
-                "font-src 'self' https://fonts.gstatic.com; "
-                "worker-src 'self' blob:; frame-ancestors 'none'",
+                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                "connect-src 'self'; "
+                "font-src 'self' data: https://cdn.jsdelivr.net; "
+                "worker-src 'self' blob:; "
+                "frame-ancestors 'none'",
             )
         else:
             headers.setdefault(
